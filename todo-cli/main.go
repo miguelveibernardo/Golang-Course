@@ -6,7 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"todo-app/list"
+	"todo-cli/list"
 )
 
 func printItems(l *list.ItemList) {
