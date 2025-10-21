@@ -3,14 +3,15 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
 	"todo-cli/list"
 )
 
-func printItems(l *list.ItemList) {
-	if len(l.Items) == 0 {
+func printItems(items []list.Item) {
+	if len(items) == 0 {
 		fmt.Println("No items found")
 		return
 	}
@@ -18,16 +19,23 @@ func printItems(l *list.ItemList) {
 	fmt.Println("To-Do list:")
 	fmt.Printf("%-5s %-12s %s\n", "ID", "STATUS", "Description")
 	fmt.Println(strings.Repeat("-", 50))
-	for _, item := range l.Items {
+	for _, item := range items {
 		fmt.Printf("%-5d %-12s %s\n", item.ID, item.Status, item.Description)
 	}
-	fmt.Println("")
+	fmt.Println()
 }
 
 func main() {
-	items := list.NewItemList(list.DefaultDataFile)
+
+	//Using the json structured logging
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
+	filename := list.DefaultDataFile
+	items := list.LoadFromFile(filename)
 	scanner := bufio.NewScanner(os.Stdin)
 
+	slog.Info("Application Started")
 	fmt.Println("Welcome to the To-Do List Application")
 	fmt.Println("Type 'help' to see available commands")
 
@@ -51,7 +59,7 @@ Available Commands:
 	add <Descriptio>					- Add a new to-do item
 	list							- Shows the entire list
 	update <id> description <new descriptio>		- Update item description
-	update <id> status <new status>				- Update item status
+	update <id> status <new status>				- Update item status (started, not started, completed)
 	delete <id>						- Delete an item
 	exit							- Exit the application
 		`)
@@ -62,7 +70,8 @@ Available Commands:
 				continue
 			}
 			desc := strings.Join(args[1:], " ")
-			items.Add(desc)
+			items = list.Add(items, desc)
+			list.SaveToFile(filename, items)
 			fmt.Println("Item added")
 
 		case "list":
@@ -76,25 +85,35 @@ Available Commands:
 			id, err := strconv.Atoi(args[1])
 			if err != nil {
 				fmt.Println("Invalid ID")
+				slog.Error("Invalid ID", "input", args[1], "error", err)
 				continue
 			}
+
 			field := args[2]
-			value := strings.Join(args[3:], " ")
+			value := strings.ToLower(strings.Join(args[3:], " "))
 
 			switch field {
 			case "description":
-				if items.UpdateDescription(id, value) {
-					fmt.Println("Description updated")
-				} else {
-					fmt.Printf("Item with ID %d not found.\n", id)
+				updatedItems, err := list.UpdateDescription(items, id, value)
+				if err != nil {
+					fmt.Println("Error: ", err)
+					slog.Error("Update description failed", "id", id, "error", err)
+					continue
 				}
+				items = updatedItems
+				list.SaveToFile(filename, items)
+				fmt.Println("Description updated")
 
 			case "status":
-				if items.UpdateStatus(id, value) {
-					fmt.Println("Status updated")
-				} else {
-					fmt.Println("Invalid status or ID")
+				updateItems, err := list.UpdateStatus(items, id, value)
+				if err != nil {
+					fmt.Println("Error: ", err)
+					slog.Error("Update status failed", "id", id, "error", err)
+					continue
 				}
+				items = updateItems
+				list.SaveToFile(list.DefaultDataFile, items)
+				fmt.Println("Status updated")
 
 			default:
 				fmt.Println("Invalid update field. Please use one of the following options: `description`, or `status`")
@@ -108,14 +127,13 @@ Available Commands:
 			id, err := strconv.Atoi(args[1])
 			if err != nil {
 				fmt.Println("Invalid ID")
+				slog.Error("Invalid delete ID", "input", args[1], "error", err)
 				continue
 			}
 
-			if items.Delete(id) {
-				fmt.Println("Item Deleted")
-			} else {
-				fmt.Printf("Item with ID %d not found.\n", id)
-			}
+			items = list.Delete(items, id)
+			list.SaveToFile(filename, items)
+			fmt.Println("Item deleted")
 
 		case "exit":
 			fmt.Println("Closing application...")
@@ -123,6 +141,7 @@ Available Commands:
 
 		default:
 			fmt.Println("Unknown command. Use 'help' for more information")
+			slog.Warn("Unknown command", "command", command)
 
 		}
 	}

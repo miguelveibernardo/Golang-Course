@@ -3,6 +3,7 @@ package list
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 )
 
@@ -21,108 +22,107 @@ type Item struct {
 	Status      string `json:"status"`
 }
 
-type ItemList struct {
-	Items  []Item
-	nextID int //ID tracker
-	File   string
-}
-
-// Creates a new ItemList and loads data from file
-func NewItemList(filename string) *ItemList {
-	l := &ItemList{File: filename}
-	l.Load()
-	return l
-}
-
-// Reads the items from the JSON file
-func (l *ItemList) Load() {
-	data, err := os.ReadFile(l.File)
+func LoadFromFile(filename string) []Item {
+	data, err := os.ReadFile(filename)
 	if err != nil {
-		l.Items = []Item{}
-		return
+		slog.Warn("No existing data file found, starting with emplty list", "file", filename, "error", err)
+		return []Item{}
 	}
 
-	if err := json.Unmarshal(data, &l.Items); err != nil {
-		fmt.Println("Error loading the items: ", err)
-		l.Items = []Item{}
-		return
+	var items []Item
+
+	if err := json.Unmarshal(data, &items); err != nil {
+		slog.Error("Error loading items", "file", filename, "error", err)
+		return []Item{}
 	}
 
-	l.nextID = 0
+	slog.Info("Items loaded from file", "file", filename, "count", len(items))
+	return items
+}
 
-	for _, item := range l.Items {
-		if item.ID >= l.nextID {
-			l.nextID = item.ID + 1
+func GetNextID(items []Item) int {
+	maxID := 0
+	for _, i := range items {
+		if i.ID >= maxID {
+			maxID = i.ID + 1
 		}
 	}
+	return maxID
 }
 
 // Saves items to JSON file
-func (l *ItemList) Save() {
+func SaveToFile(filename string, items []Item) {
 
-	data, err := json.MarshalIndent(l.Items, "", " ")
+	data, err := json.MarshalIndent(items, "", " ")
 	if err != nil {
-		fmt.Println("Error saving items: ", err)
+		slog.Error("Error marshlling items for save", "file", filename, "error", err)
 		return
 	}
 
-	if err := os.WriteFile(l.File, data, 0644); err != nil {
-		fmt.Println("Error writing to file: ", err)
+	if err := os.WriteFile(filename, data, 0644); err != nil {
+		slog.Error("Error writing items for file", "file", filename, "error", err)
+		return
 	}
+
+	slog.Info("Items save successfully", "file", filename, "count", len(items))
 }
 
-func (l *ItemList) Add(description string) {
+func Add(items []Item, description string) []Item {
 
-	item := Item{
-		ID:          l.nextID,
+	newItem := Item{
+		ID:          GetNextID(items),
 		Description: description,
 		Status:      StatusNotStarted,
 	}
-	l.nextID++
-	l.Items = append(l.Items, item)
-	l.Save()
+	slog.Info("Items added", "id", newItem.ID, "description", newItem.Description)
+	return append(items, newItem)
 }
 
-func (l *ItemList) FindByID(id int) (*Item, int) {
-	for i, item := range l.Items {
-		if item.ID == id {
-			return &l.Items[i], i
+func Delete(items []Item, id int) []Item {
+	newItems := []Item{}
+	found := false
+	for _, item := range items {
+		if item.ID != id {
+			newItems = append(newItems, item)
+		} else {
+			found = true
+			slog.Info("Item deleted", "id", id)
 		}
 	}
-	return nil, -1
+
+	if !found {
+		slog.Warn("Attempted to delete non-existing item", "id", id)
+	}
+
+	return newItems
 }
 
-func (l *ItemList) Delete(id int) bool {
-	_, index := l.FindByID(id)
-	if index == -1 {
-		return false
+func UpdateDescription(items []Item, id int, desc string) ([]Item, error) {
+	for i, item := range items {
+		if item.ID == id {
+			items[i].Description = desc
+			slog.Info("Item description updated", "id", id, "new_description", desc)
+			return items, nil
+		}
 	}
-	l.Items = append(l.Items[:index], l.Items[index+1:]...)
-	l.Save()
-	return true
+	slog.Warn("Update description failed: item not found", "id", id)
+	return items, fmt.Errorf("item with ID %d not found", id)
 }
 
-func (l *ItemList) UpdateDescription(id int, desc string) bool {
-	item, _ := l.FindByID(id)
-	if item == nil {
-		return false
+func UpdateStatus(items []Item, id int, status string) ([]Item, error) {
+	for i, item := range items {
+		if item.ID == id {
+			switch status {
+			case StatusStarted, StatusCompleted, StatusNotStarted:
+				items[i].Status = status
+				slog.Info("Item status updated", "id", id, "new_status", status)
+				return items, nil
+			default:
+				slog.Warn("Invalid status value", "status", status)
+				return items, fmt.Errorf("invalid satus: %s. Please use Started, Not Started or Completed", status)
+			}
+		}
 	}
-	item.Description = desc
-	l.Save()
-	return true
-}
-
-func (l *ItemList) UpdateStatus(id int, status string) bool {
-	item, _ := l.FindByID(id)
-	if item == nil {
-		return false
-	}
-	switch status {
-	case StatusNotStarted, StatusStarted, StatusCompleted:
-		item.Status = status
-		l.Save()
-		return true
-	default:
-		return false
-	}
+	slog.Warn("Update status failed: item not found", "id", id)
+	return items, fmt.Errorf("item with ID %d not found", id)
 }
