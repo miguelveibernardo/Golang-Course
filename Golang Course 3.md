@@ -15,8 +15,7 @@ A to-do item should include a description and a status of "not started", "starte
 - Write unit tests to cover usefully testable code
 - Use the "os/signal" package and ensure that the application only exits when it receives the interrupt signal (ctrl+c)
 3) API
-- Use ServeMux in the "net/http" package to ex
-\pose json http endpoints: "/create", "/get", "/update", and "/delete"
+- Use ServeMux in the "net/http" package to expose json http endpoints: "/create", "/get", "/update", and "/delete"
 - Add a middleware to create a context with TraceID
 4) Web page
 - Use "http.FileServer" to serve a static page to a new "/about" endpoint

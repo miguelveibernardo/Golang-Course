@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"todo-cli/api"
 	"todo-cli/list"
 )
 
@@ -27,7 +28,6 @@ func printItems(items []list.Item) {
 
 func main() {
 
-	//Using the json structured logging
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
@@ -61,9 +61,14 @@ Available Commands:
 	update <id> description <new descriptio>		- Update item description
 	update <id> status <new status>				- Update item status (started, not started, completed)
 	delete <id>						- Delete an item
+	server							- Start HTTP Json API on port 8080
 	exit							- Exit the application
 		`)
 
+		case "server":
+			fmt.Println("Starting HTTP server on http://localhost:8080")
+			api.StartServer()
+			return
 		case "add":
 			if len(args) < 2 {
 				fmt.Println("Usage: add <description>")
