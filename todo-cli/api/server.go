@@ -8,58 +8,61 @@ import (
 	"todo-cli/list"
 )
 
-func handleCreate(w http.ResponseWriter, r *http.Request) {
+func HandleCreate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var body struct {
-		Description string `json:"description"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	description := r.URL.Query().Get("description")
+	if description == "" {
+		http.Error(w, "Missing description parameter", http.StatusBadRequest)
 		return
 	}
 
 	items := list.LoadFromFile(list.DefaultDataFile)
-	items = list.Add(items, body.Description)
+	items = list.Add(items, description)
 	list.SaveToFile(list.DefaultDataFile, items)
 
+	slog.Info("Item created via API", "description", description)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(items)
 }
 
-func handleGet(w http.ResponseWriter, r *http.Request) {
+func HandleGet(w http.ResponseWriter, r *http.Request) {
 	items := list.LoadFromFile(list.DefaultDataFile)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(items)
 }
 
-func handleUpdate(w http.ResponseWriter, r *http.Request) {
+func HandleUpdate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	var body struct {
-		ID    int    `json:"id"`
-		Field string `json:"field"`
-		Value string `json:"value"`
+
+	idStr := r.URL.Query().Get("id")
+	field := r.URL.Query().Get("field")
+	value := r.URL.Query().Get("value")
+
+	if idStr == "" || field == "" || value == "" {
+		http.Error(w, "Missing required parameters (id, field, value)", http.StatusBadRequest)
+		return
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
 	}
 
 	items := list.LoadFromFile(list.DefaultDataFile)
-	var err error
 
-	switch body.Field {
+	switch field {
 	case "description":
-		items, err = list.UpdateDescription(items, body.ID, body.Value)
+		items, err = list.UpdateDescription(items, id, value)
 	case "status":
-		items, err = list.UpdateStatus(items, body.ID, body.Value)
+		items, err = list.UpdateStatus(items, id, value)
 	default:
 		http.Error(w, "Invalid field(must be 'description' or 'status')", http.StatusBadRequest)
 		return
@@ -71,12 +74,13 @@ func handleUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	list.SaveToFile(list.DefaultDataFile, items)
+	slog.Info("Item updated via API", "id", id, "field", field, "value", value)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(items)
 
 }
 
-func handleDelete(w http.ResponseWriter, r *http.Request) {
+func HandleDelete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -93,16 +97,17 @@ func handleDelete(w http.ResponseWriter, r *http.Request) {
 	items = list.Delete(items, id)
 	list.SaveToFile(list.DefaultDataFile, items)
 
+	slog.Info("Item deleted via API", "id", id)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(items)
 }
 
 func StartServer() {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/create", handleCreate)
-	mux.HandleFunc("/get", handleGet)
-	mux.HandleFunc("/update", handleUpdate)
-	mux.HandleFunc("/delete", handleDelete)
+	mux.HandleFunc("/create", HandleCreate)
+	mux.HandleFunc("/get", HandleGet)
+	mux.HandleFunc("/update", HandleUpdate)
+	mux.HandleFunc("/delete", HandleDelete)
 
 	slog.Info("Starting HTTP server", "port", 8080)
 	http.ListenAndServe(":8080", mux)
