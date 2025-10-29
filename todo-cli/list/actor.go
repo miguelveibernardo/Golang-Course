@@ -27,12 +27,10 @@ type command struct {
 
 // runs as a single actior go routine processing all commands
 type ListActor struct {
-	items   []Item
-	cmdCh   chan command
-	stopCh  chan struct{}
-	wg      sync.WaitGroup
-	stopped bool
-	mu      sync.Mutex
+	items  []Item
+	cmdCh  chan command
+	stopCh chan struct{}
+	wg     sync.WaitGroup
 }
 
 func NewListActor(initial []Item) *ListActor {
@@ -50,7 +48,10 @@ func (m *ListActor) run() {
 	defer m.wg.Done()
 	for {
 		select {
-		case cmd := <-m.cmdCh:
+		case cmd, ok := <-m.cmdCh:
+			if !ok {
+				return //close chanel, stop
+			}
 			switch cmd.cmdType {
 			case cmdAdd:
 				m.items = Add(m.items, cmd.value)
@@ -89,25 +90,24 @@ func (m *ListActor) run() {
 }
 
 func (m *ListActor) Stop() {
-	m.mu.Lock()
-	if m.stopped {
-		m.mu.Unlock()
-		return
-	}
-	m.stopped = true
+	//closeing channels will signal shutdown
 	close(m.stopCh)
-	m.mu.Unlock()
+	close(m.cmdCh)
 	m.wg.Wait()
 }
 
 func (m *ListActor) send(cmd command) ([]Item, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.stopped {
+	select {
+	case <-m.stopCh:
+		return nil, ErrActorStopped
+	default:
+	}
+	select {
+	case m.cmdCh <- cmd:
+		return <-cmd.replyCh, <-cmd.errCh
+	case <-m.stopCh:
 		return nil, ErrActorStopped
 	}
-	m.cmdCh <- cmd
-	return <-cmd.replyCh, <-cmd.errCh
 }
 
 func (m *ListActor) Add(desc string) ([]Item, error) {
