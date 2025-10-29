@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 )
 
 const DefaultDataFile = "items.json"
@@ -110,6 +111,9 @@ func UpdateDescription(items []Item, id int, desc string) ([]Item, error) {
 }
 
 func UpdateStatus(items []Item, id int, status string) ([]Item, error) {
+
+	status = strings.ToLower(status)
+
 	for i, item := range items {
 		if item.ID == id {
 			switch status {

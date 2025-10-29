@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <Title>To-Do List</Title>
+    <style>
+        body{ font-family: Arial, sans-serif; margin: 40px; }
+        h1{color: #333; }
+        table{border-collapse: collapse;width: 80%;}
+        th, td{border: 1px solid #ccc;padding: 8px; text-align: left;}
+        th {background-color: #f2f2f2;}
+        tr:nth-child(even){background-color: #f9f9f9;}
+    </style>
+</head>
+<body>
+    <h1>To-Do List</h1>
+    {{if .Items}}
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Description</th>
+            <th>Status</th>
+        </tr>
+        {{range .Items}}
+        <tr>
+            <td>{{.ID}}</td>
+            <td>{{.Description}}</td>
+            <td>{{.Status}}</td>
+        </tr>
+        {{end}}
+    </table>
+    {{else}} 
+        <p><em>No to-do items</em></p>
+    {{end}}       
+</body>
+</html>
