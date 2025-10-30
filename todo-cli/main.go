@@ -2,11 +2,15 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
+
 	"todo-cli/api"
 	"todo-cli/list"
 )
@@ -39,6 +43,17 @@ func main() {
 	fmt.Println("Welcome to the To-Do List Application")
 	fmt.Println("Type 'help' to see available commands")
 
+	//Graceful shutdown
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		<-ctx.Done()
+		slog.Info("Graceful shutdown signal received - Closing Application...")
+		stop()
+		os.Exit(0)
+	}()
+
 	for {
 		fmt.Print("> ")
 		if !scanner.Scan() {
@@ -67,8 +82,10 @@ Available Commands:
 
 		case "server":
 			fmt.Println("Starting HTTP server on http://localhost:8080")
-			api.StartServer()
-			return
+			go api.StartServer() //Starts the server
+			fmt.Println("Press Crtl+c to stop the server gracefully.")
+			select {} //keeps running until interrupted
+
 		case "add":
 			if len(args) < 2 {
 				fmt.Println("Usage: add <description>")
