@@ -4,7 +4,10 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"log"
 	"log/slog"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strconv"
@@ -83,6 +86,12 @@ Available Commands:
 		case "server":
 			fmt.Println("Starting HTTP server on http://localhost:8080")
 			go api.StartServer() //Starts the server
+
+			go func() {
+				log.Println("pprof listening on :6060")
+				log.Println(http.ListenAndServe("localhost:6060", nil))
+			}()
+
 			fmt.Println("Press Crtl+c to stop the server gracefully.")
 			select {} //keeps running until interrupted
 
